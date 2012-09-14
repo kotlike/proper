@@ -1,4 +1,3 @@
-//     (c) 2011 Michael Aufreiter
 //     Proper is freely distributable under the MIT license.
 //     For all details and documentation:
 //     http://github.com/michael/proper
@@ -247,7 +246,7 @@
     var commands = {
       em: {
         isActive: function() {
-          return document.queryCommandState('italic', false, true);
+          try{return document.queryCommandState('italic', false, true);} catch(e) {return false;}
         },
         toggleOn: function() {
           removeFormat();
@@ -260,7 +259,7 @@
 
       strong: {
         isActive: function() {
-          return document.queryCommandState('bold', false, true);
+          try{return document.queryCommandState('bold', false, true);} catch(e) {return false;}
         },
         toggleOn: function() {
           removeFormat();
@@ -310,7 +309,7 @@
 
       ul: {
         isActive: function() {
-          return document.queryCommandState('insertUnorderedList', false, true);
+          try{return document.queryCommandState('insertUnorderedList', false, true);} catch(e) {return false;}
         },
         exec: function() {
           document.execCommand('insertUnorderedList', false, true);
@@ -319,7 +318,7 @@
 
       ol: {
         isActive: function() {
-          return document.queryCommandState('insertOrderedList', false, true);
+          try{return document.queryCommandState('insertOrderedList', false, true);} catch(e) {return false;}
         },
         exec: function() {
           document.execCommand('insertOrderedList', false, true);
@@ -328,19 +327,23 @@
 
       indent: {
         exec: function() {
-          if (document.queryCommandState('insertOrderedList', false, true) ||
-              document.queryCommandState('insertUnorderedList', false, true)) {
-            document.execCommand('indent', false, true);
-          }
+          try{
+            if (document.queryCommandState('insertOrderedList', false, true) ||
+                document.queryCommandState('insertUnorderedList', false, true)) {
+              document.execCommand('indent', false, true);
+            }
+          } catch(e) {}
         }
       },
 
       outdent: {
         exec: function() {
-          if (document.queryCommandState('insertOrderedList', false, true) ||
-              document.queryCommandState('insertUnorderedList', false, true)) {
-            document.execCommand('outdent', false, true);
-          }
+          try{
+            if (document.queryCommandState('insertOrderedList', false, true) ||
+                document.queryCommandState('insertUnorderedList', false, true)) {
+              document.execCommand('outdent', false, true);
+            }
+          } catch(e) {}
         }
       }
     };
