@@ -17,79 +17,109 @@
 
 (function(){
 
-  /* Adapted from http://github.com/hasenj/proper */
-  function getDirection(text, guesstimate) {
-    function getWordDir(word) {
-      // regexes to identify ltr and rtl characters
-      // stolen from google's i18n.bidi
-      var ltr_re_ =
-          'A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF' +
-          '\u2C00-\uFB1C\uFE00-\uFE6F\uFEFD-\uFFFF';
+  // Refences to the native implementations of the standard functions to facilitate life a little
+  var
+    ecmaFilter = Array.prototype.filter,
+    ecmaForEach = Array.prototype.forEach,
+    ecmaIndexOf = Array.prototype.indexOf,
+    ecmaIsArray = Array.isArray,
+    ecmaMap = Array.prototype.map,
+    ecmaSlice = Array.prototype.slice,
+    ecmaTrim = String.prototype.trim;
 
-      var rtl_re_ = '\u0591-\u07FF\uFB1D-\uFDFF\uFE70-\uFEFC';
-      // end of google steal
-      var ltr_re = RegExp('[' + ltr_re_ + ']+');
-      var rtl_re = RegExp('[' + rtl_re_ + ']+');
-      if(ltr_re.exec(word)) {
-          return 'L';
-      } else if (rtl_re.exec(word)) {
-          return 'R';
-      } else {
-          return 'N';
-      }
-    }
+  // Object encapsulating the most functions needed for collection and string manipulations
+  var help = {};
+  // Collection function
 
-    if (guesstimate == null) guesstimate = false;
+  // Extend a given object with all the properties in passed-in object(s).
+  help.extend = function(obj) {
+    help.each( ecmaSlice.call(arguments, 1), function(s) {
+      for (var p in s) obj[p] = s[p];
+    });
+    return obj;
+  };
 
-    // TODO: check first character is a unicode dir character!
-    var is_word = function(word) {
-        return word.length > 0; // && word.match(/\w+/) 
-        // wops! \w only matches ascii characters :(
-    }
-    var words = _.filter(text.split(' '), is_word);
+  help.map = function(obj, iterator, context) {
+    var res = [];
+    if (ecmaMap && obj.map === ecmaMap) return obj.map(iterator, context);
+    help.each(obj, function(value, index, list) {
+      res[res.length] = iterator.call(context, value, index, list);
+    });
+    return res;
+  };
 
-    var dirs = _.map(words,getWordDir);
+  help.filter = function(obj, iterator, context) {
+    var res = [];
+    if (ecmaFilter && obj.filter === ecmaFilter) return obj.filter(iterator, context);
+    help.each(obj, function(value, index, list) {
+      if (iterator.call(context, value, index, list)) res[res.length] = value;
+    });
+    return res;
+  };
 
-    var func_same_direction = function(dir) { 
-        return function(d) { return d == dir; }; 
-    }
-    var is_non_neutral_dir = function(d) { return d != 'N'; };
-    var other_direction = function(dir) { return {'L':'R', 'R':'L'}[dir]; };
+  help.each = function(obj, iterator, context) {
+    // XUI provides a fallback implementation of native forEach so it should be fine
+    if (ecmaForEach && obj.forEach === ecmaForEach) return obj.forEach(iterator, context);
+    else if ( typeof obj.length == 'number')
+      for (var i = 0, l = obj.length; i < l; i++)
+        if (iterator.call(context, obj[i], i, obj) === false) return;
+    else
+      for (var key in obj)
+        if (Object.prototype.hasOwnProperty.call(obj, key))
+          if (iterator.call(context, obj[key], key, obj) === false) return;
+  };
 
-    // should be really the same as dirs because we already filtered out
-    // things that are not words!
-    var X = 100;
-    var hard_dirs = _.filter(dirs, is_non_neutral_dir).slice(0, X);
+  help.indexOf = function(a, e) {
+    if (ecmaIndexOf && a.indexOf === ecmaIndexOf) return a.indexOf(e);
+    for (var i = 0, l = a.length; i < l; ++i) if ( e === a[i]) return i;
+    return -1;
+  };
 
-    if (hard_dirs.length == 0) { return 'N'; }
-    var candidate = hard_dirs[0];
+  help.clone = function(obj) {
+    return help.isArray(obj) ? obj.slice() : help.extend({}, obj);
+  };
 
-    if(guesstimate === false) {
-        return candidate;
-    }
+  help.isArray = ecmaIsArray || function(obj) {
+    return !!(obj && obj.concat && obj.unshift && !obj.callee);
+  };
 
-    var DIR_COUNT_THRESHOLD = 10;
-    if (hard_dirs.length < DIR_COUNT_THRESHOLD) return candidate;
+  // String functions
 
-    var cand_words = hard_dirs.filter(func_same_direction(candidate));
-    var other_words = hard_dirs.filter(func_same_direction(other_direction(candidate)));
+  help.trim = ecmaTrim && !ecmaTrim.call("\uFEFF\xA0") ?
+    function( text ) {
+      return text == null ?
+        "" :
+        ecmaTrim.call( text );
+    } :
+    // Otherwise use our own trimming functionality
+    function( text ) {
+      return text == null ?
+        "" :
+        text.toString().replace( rtrim, "" );
+  };
 
-    if (other_words.length == 0) return candidate;
-    var other_dir = other_words[0];
+  help.stripTags = function(input, allowed) {
+    // Strips HTML and PHP tags from a string
+    //
+    // version: 1009.2513
+    // discuss at: http://phpjs.org/functions/strip_tags
+    allowed = (((allowed || "") + "")
+      .toLowerCase()
+      .match(/<[a-z][a-z0-9]*>/g) || [])
+      .join(''); // making sure the allowed arg is a string containing only tags in lowercase (<a><b><c>)
+    var tags = /<\/?([a-z][a-z0-9]*)\b[^>]*>/gi,
+      commentsAndPhpTags = /<!--[\s\S]*?-->|<\?(?:php)?[\s\S]*?\?>/gi;
+    return input.replace(commentsAndPhpTags, '').replace(tags, function($0, $1){
+      return allowed.indexOf('<' + $1.toLowerCase() + '>') > -1 ? $0 : '';
+    });
+  };
 
-    var MIN_RATIO = 0.4; // P
-    var ratio = cand_words.length / other_words.length;
-    if (ratio >= MIN_RATIO) {
-        return candidate;
-    } else {
-        return other_dir;
-    }
-  }
 
 
-  // _.Events (borrowed from Backbone.js)
+
+  // borrowed from Backbone.js)
   // ------------------------------------
-  
+
   // A module that can be mixed in to *any object* in order to provide it with
   // custom events. You may `bind` or `unbind` a callback function to an event;
   // `trigger`-ing an event fires all callbacks in succession.
@@ -99,9 +129,8 @@
   //     object.bind('expand', function(){ alert('expanded'); });
   //     object.trigger('expand');
   //
-  
-  _.Events = window.Backbone ? Backbone.Events : {
 
+  var Events = window.Backbone ? Backbone.Events : {
     // Bind an event, specified by a string name, `ev`, to a `callback` function.
     // Passing `"all"` will bind the callback to all events fired.
     bind : function(ev, callback) {
@@ -154,27 +183,80 @@
       return this;
     }
   };
-  
-  _.stripTags = function(input, allowed) {
-  // Strips HTML and PHP tags from a string
-  //
-  // version: 1009.2513
-  // discuss at: http://phpjs.org/functions/strip_tags
-     allowed = (((allowed || "") + "")
-        .toLowerCase()
-        .match(/<[a-z][a-z0-9]*>/g) || [])
-        .join(''); // making sure the allowed arg is a string containing only tags in lowercase (<a><b><c>)
-     var tags = /<\/?([a-z][a-z0-9]*)\b[^>]*>/gi,
-         commentsAndPhpTags = /<!--[\s\S]*?-->|<\?(?:php)?[\s\S]*?\?>/gi;
-     return input.replace(commentsAndPhpTags, '').replace(tags, function($0, $1){
-        return allowed.indexOf('<' + $1.toLowerCase() + '>') > -1 ? $0 : '';
-     });
-  };
+
+  /* Adapted from http://github.com/hasenj/proper */
+  function getDirection(text, guesstimate) {
+    function getWordDir(word) {
+      // regexes to identify ltr and rtl characters
+      // stolen from google's i18n.bidi
+      var ltr_re_ =
+          'A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF' +
+          '\u2C00-\uFB1C\uFE00-\uFE6F\uFEFD-\uFFFF';
+
+      var rtl_re_ = '\u0591-\u07FF\uFB1D-\uFDFF\uFE70-\uFEFC';
+      // end of google steal
+      var ltr_re = RegExp('[' + ltr_re_ + ']+');
+      var rtl_re = RegExp('[' + rtl_re_ + ']+');
+      if(ltr_re.exec(word)) {
+          return 'L';
+      } else if (rtl_re.exec(word)) {
+          return 'R';
+      } else {
+          return 'N';
+      }
+    }
+
+    if (guesstimate == null) guesstimate = false;
+
+    // TODO: check first character is a unicode dir character!
+    var is_word = function(word) {
+        return word.length > 0; // && word.match(/\w+/) 
+        // wops! \w only matches ascii characters :(
+    }
+    var words = help.filter(text.split(' '), is_word);
+
+    var dirs = help.map(words,getWordDir);
+
+    var func_same_direction = function(dir) { 
+        return function(d) { return d == dir; }; 
+    }
+    var is_non_neutral_dir = function(d) { return d != 'N'; };
+    var other_direction = function(dir) { return {'L':'R', 'R':'L'}[dir]; };
+
+    // should be really the same as dirs because we already filtered out
+    // things that are not words!
+    var X = 100;
+    var hard_dirs = help.filter(dirs, is_non_neutral_dir).slice(0, X);
+
+    if (hard_dirs.length == 0) { return 'N'; }
+    var candidate = hard_dirs[0];
+
+    if(guesstimate === false) {
+        return candidate;
+    }
+
+    var DIR_COUNT_THRESHOLD = 10;
+    if (hard_dirs.length < DIR_COUNT_THRESHOLD) return candidate;
+
+    var cand_words = hard_dirs.filter(func_same_direction(candidate));
+    var other_words = hard_dirs.filter(func_same_direction(other_direction(candidate)));
+
+    if (other_words.length == 0) return candidate;
+    var other_dir = other_words[0];
+
+    var MIN_RATIO = 0.4; // P
+    var ratio = cand_words.length / other_words.length;
+    if (ratio >= MIN_RATIO) {
+        return candidate;
+    } else {
+        return other_dir;
+    }
+  }
 
   // Initial Setup
   // -------------
 
-  controlsTpl = ' \
+  var controlsTpl = ' \
     <div class="proper-commands"> \
       <a href="#" title="Emphasis (CTRL+SHIFT+E)" class="command em" command="em"><div>Emphasis</div></a> \
       <a href="#" title="Strong (CTRL+SHIFT+S)" class="command strong" command="strong"><div>Strong</div></a> \
@@ -194,7 +276,7 @@
     var activeElement = null, // element that's being edited
         $controls,
         direction = "left",
-        events = _.extend({}, _.Events),
+        events = help.extend({}, Events),
         pendingChange = false,
         options = {},
         defaultOptions = { // default options
@@ -228,7 +310,7 @@
 
     function removeFormat() {
       document.execCommand('removeFormat', false, true);
-      _.each(['em', 'strong', 'code'], function (cmd) {
+      help.each(['em', 'strong', 'code'], function (cmd) {
         var command = commands[cmd];
         if (command.isActive()) {
           command.toggleOff();
@@ -363,9 +445,9 @@
       // stack (e.g. `Monaco, Consolas, "Lucida Console", monospace`).
       if ($.browser.msie) {
         if (a.split(',').length === 1) {
-          return _.indexOf(b.split(','), a) > -1;
+          return help.indexOf(b.split(','), a) > -1;
         } else if (b.split(',').length === 1) {
-          return _.indexOf(a.split(','), b) > -1;
+          return help.indexOf(a.split(','), b) > -1;
         } else {
           return a === b;
         }
@@ -440,7 +522,7 @@
         }
         // _.clone is necessary because it turns the `childNodes` live
         // dom collection into a static array.
-        var children = _.clone(node.get(0).childNodes);
+        var children = help.clone(node.get(0).childNodes);
         for (var i = 0, l = children.length; i < l; i++) {
           var child = children[i];
           if (!$(child).is('p, ul, ol') &&
@@ -493,7 +575,7 @@
       if (!options.markup) return;
       
       $controls.find('.command').removeClass('selected');
-      _.each(commands, function(command, name) {
+      help.each(commands, function(command, name) {
         if (command.isActive && command.isActive()) {
           $controls.find('.command.'+name).addClass('selected');
         }
@@ -649,7 +731,7 @@
             var old  = $(this)
             ,   neww = $(document.createElement(tag));
             neww.html(old.html());
-            _.each(allowedTags[tag], function (name) {
+            help.each(allowedTags[tag], function (name) {
               neww.attr(name, old.attr(name));
             });
             old.replaceWith(neww);
@@ -774,6 +856,7 @@
         .attr('contenteditable', 'false')
         .unbind('paste')
         .unbind('keydown');
+      // x$('.proper-commands').html('remove');
       $('.proper-commands').remove();
       events.unbind('changed');
     };
@@ -781,7 +864,7 @@
     // Activate editor for a given element
     function activate (el, opts) {
       options = {};
-      _.extend(options, defaultOptions, opts);
+      help.extend(options, defaultOptions, opts);
       
       // Deactivate previously active element
       deactivate();
@@ -793,7 +876,9 @@
       
       // Setup controls
       if (options.markup) {
-        $controls = $(controlsTpl); 
+        // $controls = x$(controlsTpl);
+        // x$(options.controlsTarget).bottom($controls);
+        $controls = $(controlsTpl);
         $controls.appendTo($(options.controlsTarget));
       }
       
@@ -853,17 +938,17 @@
         return clone.html();
       } else {
         if (options.multiline) {
-          return $.trim(_.stripTags($(activeElement).html().replace(/<div>/g, '\n')
+          return $.trim(help.stripTags($(activeElement).html().replace(/<div>/g, '\n')
                                              .replace(/<\/div>/g, '')));
         } else {
-          return $.trim(_.stripTags($(activeElement).html()));
+          return $.trim(help.stripTags($(activeElement).html()));
         }
       }
     };
     
     // Get current content but stripped
     function contentStripped () {
-      return _.stripTags(this.content());
+      return help.stripTags(this.content());
     };
     
     // Expose public API
