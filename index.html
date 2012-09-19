@@ -50,6 +50,48 @@
   <script src="lib/jquery-min.js"></script>
   <script src="lib/jquery.hotkeys.js"></script>
 
+  <!--
+       Load the XUI library depending on the browser.
+
+       So we have three version of the library:
+       - IE
+       - non-IE - Blackberry
+       - non-IE - the rest of them
+
+       I find this simple, yet fast and bulletproof
+       technique in our case.
+
+       The algo:
+       - Use conditional IE comments to divide browsers on IE and non-IE
+       - For IE Browsers just load XUI version for IE
+       - For non-IE browsers use script that will load the version of the XUI
+         depending on the UA string of Navigator object.
+  -->
+  <!--[if IE]>
+  <script src="lib/xui-ie-2.3.2.js"></script>
+  <![endif]-->
+  <!--[if !IE]><!-->
+  <script>
+      (function(min){
+          var a = document.createElement('script'),
+              xui_pref = '-',
+              version = '2.3.2',
+              minified = min ? '.min' : '',
+              test = function(patt, prop){ return patt.test(window.navigator[prop]); };
+
+          if(test(/Blackberry/i, 'userAgent')) xui_pref += 'bb-';
+          // We need this for IE >= 10, which no longer supports conditional comments
+          else if(test(/MSIE/i , 'userAgent')) xui_pref += 'ie-';
+
+          a.type = 'text/javascript';
+          a.async = true;
+          a.src = 'lib/xui' + xui_pref + version + minified + '.js';
+
+          var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(a, s);
+      })(false);
+  </script>
+  <!--<![endif]-->
+
   <!-- Source -->
   <script src="proper.js"></script>
 
