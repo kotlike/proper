@@ -6,7 +6,6 @@
   <!-- Styles -->
   <link href="stylesheets/page.css" media="screen" rel="stylesheet" type="text/css" />
   <link href="stylesheets/proper.css" media="screen" rel="stylesheet" type="text/css" />
-
 </head>
 <body>
   <h1>PROPER&trade; - Semantic Rich Text Editor (Version 0.3.1)</h1>
@@ -46,10 +45,6 @@
   
   <a href="http://github.com/michael/proper"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://assets2.github.com/img/71eeaab9d563c2b3c590319b398dd35683265e85?repo=&url=http%3A%2F%2Fs3.amazonaws.com%2Fgithub%2Fribbons%2Fforkme_right_gray_6d6d6d.png&path=" alt="Fork me on GitHub"></a>
 
-  <!-- Libraries -->
-  <script src="lib/jquery-min.js"></script>
-  <script src="lib/jquery.hotkeys.js"></script>
-
   <!--
        Load the XUI library depending on the browser.
 
@@ -58,13 +53,12 @@
        - non-IE - Blackberry
        - non-IE - the rest of them
 
-       I find this simple, yet fast and bulletproof
-       technique in our case.
+       I'm finding this technique simple, yet fast and bulletproof in our case.
 
        The algo:
        - Use conditional IE comments to divide browsers on IE and non-IE
        - For IE Browsers just load XUI version for IE
-       - For non-IE browsers use script that will load the version of the XUI
+       - For non-IE browsers use script that will load the version of the XUI (synchronously)
          depending on the UA string of Navigator object.
   -->
   <!--[if IE]>
@@ -72,35 +66,34 @@
   <![endif]-->
   <!--[if !IE]><!-->
   <script>
-      (function(min){
-          var a = document.createElement('script'),
-              xui_pref = '-',
-              version = '2.3.2',
-              minified = min ? '.min' : '',
-              test = function(patt, prop){ return patt.test(window.navigator[prop]); };
+      document.write('<scr' + 'ipt src="' + (function(min){
+          var xui_pref = '-',
+                  version = '2.3.2',
+                  minified = min ? '.min' : '',
+                  test = function(patt, prop){ return patt.test(window.navigator[prop]); };
 
           if(test(/Blackberry/i, 'userAgent')) xui_pref += 'bb-';
           // We need this for IE >= 10, which no longer supports conditional comments
           else if(test(/MSIE/i , 'userAgent')) xui_pref += 'ie-';
 
-          a.type = 'text/javascript';
-          a.async = true;
-          a.src = 'lib/xui' + xui_pref + version + minified + '.js';
-
-          var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(a, s);
-      })(false);
+          return 'lib/xui' + xui_pref + version + minified + '.js';
+      })(false) + '"><\/scr' + 'ipt>');
   </script>
   <!--<![endif]-->
+
+  <!-- Libraries -->
+  <script src="lib/jquery-min.js"></script>
+  <script src="lib/jquery.hotkeys.js"></script>
 
   <!-- Source -->
   <script src="proper.js"></script>
 
   <script>
       // Proper Init
-      $(function() {
+      xui.ready(function() {
           window.editor = new Proper();
 
-          $('.content').click(function() {
+          x$('.content').click(function() {
               editor.activate($(this), {
                   placeholder: 'Enter Text',
                   controlsTarget: $('#tools'),
@@ -113,7 +106,7 @@
               });
           });
 
-          $('h2.no-markup').click(function() {
+          x$('h2.no-markup').click(function() {
               editor.activate($(this), { markup: false, multiline: false });
 
               // Update node when editor commands are applied

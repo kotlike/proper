@@ -114,8 +114,39 @@
     });
   };
 
+  // Borrowed from jQuery.browser
+  var browser = {};
+  // We do not want to pollute our object with unnecessary variables
+  (function(){
 
+    var matched = (function( ua ) {
+      ua = ua.toLowerCase();
 
+      var match = /(chrome)[ \/]([\w.]+)/.exec( ua ) ||
+        /(webkit)[ \/]([\w.]+)/.exec( ua ) ||
+        /(opera)(?:.*version|)[ \/]([\w.]+)/.exec( ua ) ||
+        /(msie) ([\w.]+)/.exec( ua ) ||
+        ua.indexOf("compatible") < 0 && /(mozilla)(?:.*? rv:([\w.]+)|)/.exec( ua ) ||
+        [];
+
+      return {
+        browser: match[ 1 ] || "",
+        version: match[ 2 ] || "0"
+      };
+    })(window.navigator.userAgent);
+
+    if ( matched.browser ) {
+      browser[ matched.browser ] = true;
+      browser.version = matched.version;
+    }
+  })();
+
+// Chrome is Webkit, but Webkit is also Safari.
+  if ( browser.chrome ) {
+    browser.webkit = true;
+  } else if ( browser.webkit ) {
+    browser.safari = true;
+  }
 
   // borrowed from Backbone.js)
   // ------------------------------------
@@ -363,7 +394,7 @@
         },
         toggleOff: function () {
           var sel;
-          if ($.browser.webkit && (sel = saveSelection()).collapsed) {
+          if (browser.webkit && (sel = saveSelection()).collapsed) {
             // Workaround for Webkit. Without this, the user wouldn't be
             // able to disable <code> when there's no selection.
             var container = sel.endContainer
@@ -443,7 +474,7 @@
       // Internet Explorer's `document.queryCommandValue('fontName')` returns
       // only the applied font family (e.g. `Consolas`), not the full font
       // stack (e.g. `Monaco, Consolas, "Lucida Console", monospace`).
-      if ($.browser.msie) {
+      if (browser.msie) {
         if (a.split(',').length === 1) {
           return help.indexOf(b.split(','), a) > -1;
         } else if (b.split(',').length === 1) {
@@ -807,7 +838,7 @@
           e.preventDefault();
         }
         // By default, Firefox doesn't create paragraphs. Fix this.
-        if ($.browser.mozilla) {
+        if (browser.mozilla) {
           var selectionStart = saveSelection().startContainer;
           if (options.multiline && !isTag(selectionStart, 'p') && !isTag(selectionStart, 'ul')) {
             document.execCommand('insertParagraph', false, true);
