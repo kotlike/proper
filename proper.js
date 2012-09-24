@@ -27,8 +27,9 @@
     ecmaSlice = Array.prototype.slice,
     ecmaTrim = String.prototype.trim;
 
-  // Object encapsulating the most functions needed for collection and string manipulations
+  // Object encapsulating the most functions needed for collection and string manipulations (Borrowed from Underscore.js)
   var help = {};
+
   // Collection function
 
   // Extend a given object with all the properties in passed-in object(s).
@@ -60,13 +61,16 @@
   help.each = function(obj, iterator, context) {
     // XUI provides a fallback implementation of native forEach so it should be fine
     if (ecmaForEach && obj.forEach === ecmaForEach) return obj.forEach(iterator, context);
-    else if ( typeof obj.length == 'number')
+    else if ( typeof obj.length == 'number'){
       for (var i = 0, l = obj.length; i < l; i++)
         if (iterator.call(context, obj[i], i, obj) === false) return;
-    else
-      for (var key in obj)
+    }
+    else{
+      for (var key in obj){
         if (Object.prototype.hasOwnProperty.call(obj, key))
           if (iterator.call(context, obj[key], key, obj) === false) return;
+      }
+    }
   };
 
   help.indexOf = function(a, e) {
@@ -85,6 +89,7 @@
 
   // String functions
 
+  // jQuery implementation
   help.trim = ecmaTrim && !ecmaTrim.call("\uFEFF\xA0") ?
     function( text ) {
       return text == null ?
@@ -95,7 +100,7 @@
     function( text ) {
       return text == null ?
         "" :
-        text.toString().replace( rtrim, "" );
+        text.toString().replace( /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, "" );
   };
 
   help.stripTags = function(input, allowed) {
@@ -114,7 +119,53 @@
     });
   };
 
-  // Borrowed from jQuery.browser
+  // Helpers for handling the DOM
+
+  // Check if the current elements name equals to the given one
+  help.isNode = function(elem, name){
+    return elem.nodeName && elem.nodeName.toLowerCase() === name.toLowerCase();
+  };
+  // Get all sibling nodes of n != elem of type Element
+  help.elemSiblings = function( n, elem ) {
+    var r = [];
+
+    for ( ; n; n = n.nextSibling ) {
+      if ( n.nodeType === 1 && n !== elem ) {
+        r.push( n );
+      }
+    }
+
+    return r;
+  };
+  // Get `dir` sibling node of type Element starting from `cur`
+  help.sibling = function( cur, dir ){
+    do {
+      cur = cur[ dir ];
+    } while ( cur && cur.nodeType !== 1 );
+
+    return cur;
+  };
+  // Sizzle's utility function
+  help.text = function( elems ) {
+    var ret = "", elem;
+
+    for ( var i = 0; elems[i]; i++ ) {
+      elem = elems[i];
+
+      // Get the text from text nodes and CDATA nodes
+      if ( elem.nodeType === 3 || elem.nodeType === 4 ) {
+        ret += elem.nodeValue;
+
+        // Traverse everything else, except comment nodes
+      } else if ( elem.nodeType !== 8 ) {
+        ret += help.text( elem.childNodes );
+      }
+    }
+
+    return ret;
+  };
+
+  // Borrowed from jQuery.browser, slightly modified though
   var browser = {};
   // We do not want to pollute our object with unnecessary variables
   (function(){
@@ -147,6 +198,219 @@
   } else if ( browser.webkit ) {
     browser.safari = true;
   }
+
+
+
+  // extend XUI with functionality it lacks ( adopted most of the jQuery's methods to work with XUI)
+
+  if(typeof window.xui != 'undefined' &&
+     typeof window.x$ != undefined){
+
+    x$.extend({
+      // Pass each element in the current matched set through a function,
+      // producing a new XUI object containing the return values.
+      //
+      //     `element` is the current element
+      //     `index` is the element index in the XUI collection
+      //     `args` is optional argument you may pass to the function
+      //     function( element, index, args ) {
+      //         `this` is the current element
+      //     }
+      //
+      // In case the function returns null value it won't be included in the resulting set of elements
+      map: function(fn, args){
+        var ret = [];
+        // capture only non-null values
+        help.map(ecmaSlice.call(this), function(el, i){
+          var val = fn.call(el, el, i, args);
+          if ( val != null ) {
+            ret[ ret.length ] = val;
+          }
+        }, this);
+        // construct a new XUI object with flattened array of elements
+        return this.set(ret.concat.apply([], ret));
+      },
+      // Reduce the set of matched elements to the one at the specified index.
+      eq: function( i ) {
+        i = +i;
+        return i === -1 ?
+          this.slice( i ) :
+          this.slice( i, i + 1 );
+      },
+      // Returns the first element in the matched set
+      first: function() {
+        return this.eq( 0 );
+      },
+      // Returns the last element in the matched set
+      last: function() {
+        return this.eq( -1 );
+      },
+      // Pipe the matched set of elements through the core Array.prototype.slice method
+      slice: function() {
+        return this.set( ecmaSlice.apply( this, arguments ));
+      },
+      // Retrieve the DOM elements matched by the XUI object.
+      // If called with no arguments Converts XUI Collection to plain Array
+      get: function(n){
+        return n === undefined || typeof n != 'number' ?
+          // Return a 'clean' array
+          ecmaSlice.call(this) :
+          // Otherwise return the n-th object
+          ( n < 0 ? this[ this.length + n ] : this[ n ] );
+      },
+      // Check the current matched set of elements against a selector, callback in the form of function(elem, index)
+      // element, or XUI object and return true if at least one of these
+      // elements matches the given arguments.
+      is: function(q){
+        var list = this;
+        return !!q && (
+          typeof q == "string" ?
+            // to be more efficient, that is not to search in a context of the document
+            // get the parents of our elements and then filter results
+            // TODO: maybe use Sizzle library at a later time
+            this.parent().find(q).filter(function(){
+              var found, s = this;
+              list.each(function(el){
+                return found = s === el;
+              });
+              return found;
+            }).length > 0 :
+            this.filter( function(i){
+              if ( typeof q == 'function' ) {
+                return !!q.call(this, this, i);
+              } else if ( q.nodeType ) {
+                return this === q;
+              }
+              return help.indexOf(q, this) >= 0;
+            } ).length > 0 );
+      },
+      // Get the combined text contents of each element in the set of matched elements, including their descendants.
+      // Set the content of each element in the set of matched elements to the specified text.
+      text: function( val ) {
+          return val === undefined ?
+            help.text( this ) :
+            this.empty().bottom( ( this[0] && this[0].ownerDocument || document ).createTextNode( val ) );
+      },
+      // removes the set of matched elements from the DOM
+      // optionally filtered by a selector.
+      remove: function(q){
+        return q === undefined ?
+          this.html('remove') :
+          this.filter(function(i){ // TODO: .each may be more efficient, but references to removed elements will remain
+            var elem = x$(this),
+              match = elem.is(q);
+            if(match) elem.html('remove');
+
+            return !match;
+          });
+      },
+      // Remove all child nodes of the set of matched elements from the DOM.
+      empty: function(){
+        return this.each(function(el){
+          while(el.firstChild) el.removeChild(el.firstChild);
+        });
+      },
+      // Replace each element in the set of matched elements with the provided new content.
+      //
+      // value is either a string of html, element or a callback
+      // `index` - elements index
+      // `old` - old HTML
+      // function(index, old_content){
+      //     `this` is the element itself
+      // }
+      //
+      // .replace() is an alias for html('outer', value) and outer(value)
+      // except those two do not accept a callback
+      replace: function(value){
+        if(typeof value == 'function'){
+          return this.each(function(el, i){
+            var s = x$(el),
+              old = s.html();
+            s.replace( value.call( el, i , old ) );
+          });
+        }
+
+        return xui.fn.html.call(this, 'outer', value);
+      },
+      // Wrap an HTML structure around all elements in the set of matched elements.
+      wrap: function(html){
+        var isFunc = typeof html == 'function';
+        return this.each(function(el, i){
+          // The elements to wrap the target around
+          var s = x$(this),
+              wrapper = x$( isFunc ? html.call(el, el, i) : html, this.ownerDocument ).eq(0);
+
+          if ( this.parentNode ) {
+            s.before(wrapper);
+          }
+
+          wrapper.map(function() {
+            var elem = this;
+
+            while ( elem.firstChild && elem.firstChild.nodeType === 1 ) {
+              elem = elem.firstChild;
+            }
+
+            return elem;
+          }).bottom( s.remove() );
+
+        });
+      },
+      // Remove the parents of the set of matched elements from the DOM,
+      // leaving the matched elements in their place.
+      unwrap: function() {
+        return this.parent().each(function() {
+          if ( !help.isNode( this, "body" ) ) {
+            x$( this ).replace( x$(this.childNodes) ); // XUI cannot accept the NodeList as a parameter to .html('outer', --> elem <-- );
+          }
+        });
+      }
+    });
+
+    // Bulk extend XUI with commonly used traversal methods
+    help.each({
+        // Get the parent of each element in the current set of matched elements,
+        // optionally filtered by a selector.
+        parent: function( elem ) {
+          var parent = elem.parentNode;
+          return parent && parent.nodeType !== 11 ? parent : null;
+        },
+        // Get the immediately following sibling of each element in the set of matched elements.
+        // If a selector is provided, it retrieves the next sibling only if it matches that selector.
+        next: function( elem ) {
+          return help.sibling( elem, "nextSibling" );
+        },
+        // Get the immediately preceding sibling of each element in the set of matched elements,
+        // optionally filtered by a selector.
+        prev: function( elem ) {
+          return help.sibling( elem, "previousSibling" );
+        },
+        // Get the siblings of each element in the set of matched elements,
+        // optionally filtered by a selector.
+        siblings: function( elem ) {
+          return help.elemSiblings( ( elem.parentNode || {} ).firstChild, elem );
+        },
+        // Get the children of each element in the set of matched elements,
+        // optionally filtered by a selector.
+        children: function( elem ) {
+          return help.elemSiblings( elem.firstChild );
+        },
+        // Get the children of each element in the set of matched elements,
+        // including text and comment nodes.
+        contents: function( elem ) {
+          return help.isNode( elem, "iframe" ) ?
+            elem.contentDocument || elem.contentWindow.document :
+            [].concat(elem.childNodes);
+
+        }
+      },
+      function( fn, name ) {
+        xui.fn[ name ] = function( selector ) {
+          return selector && typeof selector === "string" ? this.map(fn).find(selector) : this.map(fn);
+        };
+      }, this);
+  }
+
 
   // borrowed from Backbone.js)
   // ------------------------------------
@@ -203,7 +467,7 @@
       if (!(calls = this._callbacks)) return this;
       if (list = calls[ev]) {
         for (i = 0, l = list.length; i < l; i++) {
-          list[i].apply(this, Array.prototype.slice.call(arguments, 1));
+          list[i].apply(this, ecmaSlice.call(arguments, 1));
         }
       }
       if (list = calls['all']) {
@@ -351,10 +615,10 @@
 
     // Give code elements (= monospace font) the class `proper-code`.
     function addCodeClasses() {
-      $(activeElement).find('font').addClass('proper-code');
+      x$(activeElement).find('font').addClass('proper-code');
     }
 
-    var nbsp = $('<span>&nbsp;</span>').text();
+    var nbsp = x$('<span>&nbsp;</span>').text();
 
     var commands = {
       em: {
@@ -499,9 +763,9 @@
     }
 
     function updateDirection() {
-      var dir = getDirection($(activeElement).text());
+      var dir = getDirection(x$(activeElement).text());
       direction = dir === "R" ? "right" : "left";
-      $(activeElement).css('direction', dir === "R" ? "rtl" : "ltr");
+      x$(activeElement).setStyle('direction', dir === "R" ? "rtl" : "ltr");
     }
     
     // Recursively walks the dom and returns the semantified contents. Replaces
@@ -510,7 +774,7 @@
     function semantifyContents(node) {
       function replace(presentational, semantic) {
         node.find(presentational).each(function () {
-          $(this).replaceWith($(document.createElement(semantic)).html($(this).html()));
+          x$(this).replace(x$(document.createElement(semantic)).html(x$(this).html()));
         });
       }
       replace('i', 'em');
@@ -521,22 +785,24 @@
       
       node.find('span').each(function () {
         if (this.firstChild) {
-          $(this.firstChild).unwrap();
+          x$(this.firstChild).unwrap();
         }
       });
       
       node.find('p, ul, ol').each(function () {
-        while ($(this).parent().is('p')) {
-          $(this).unwrap();
+        while (x$(this).parent().is('p')) {
+          x$(this).unwrap();
         }
       });
       
       // Fix nested lists
       node.find('ul > ul, ul > ol, ol > ul, ol > ol').each(function () {
-        if ($(this).prev()) {
-          $(this).prev().append(this);
+        var s = x$(this),
+            prev = s.prev();
+        if (prev.length) {
+          prev.bottom(this); // TODO: test
         } else {
-          $(this).wrap($('<li />'));
+          s.wrap(x$('<li />'));
         }
       });
       
@@ -544,19 +810,20 @@
         var currentP = [];
         function wrapInP() {
           if (currentP.length) {
-            var p = $('<p />').insertBefore(currentP[0]);
+            var p = x$(currentP[0]).before('<p />').prev();
             for (var i = 0, l = currentP.length; i < l; i++) {
-              $(currentP[i]).remove().appendTo(p);
+              p.bottom( x$(currentP[i]).remove() );
             }
             currentP = [];
           }
         }
-        // _.clone is necessary because it turns the `childNodes` live
+
+        // help.clone is necessary because it turns the `childNodes` live
         // dom collection into a static array.
         var children = help.clone(node.get(0).childNodes);
         for (var i = 0, l = children.length; i < l; i++) {
           var child = children[i];
-          if (!$(child).is('p, ul, ol') &&
+          if (!x$(child).is('p, ul, ol') &&
               !(child.nodeType === Node.TEXT_NODE && (/^\s*$/).exec(child.data))) {
             currentP.push(child);
           } else {
@@ -569,13 +836,13 @@
       // Remove unnecessary br's
       node.find('br').each(function () {
         if (this.parentNode.lastChild === this) {
-          $(this).remove();
+          x$(this).remove();
         }
       });
       
       // Remove all spans
       node.find('span').each(function () {
-        $(this).children().first().unwrap();
+        x$(this).children().first().unwrap();
       });
     }
     
@@ -585,14 +852,14 @@
       doWithSelection(function () {
         function replace(semantic, presentational) {
           node.find(semantic).each(function () {
-            var presentationalEl = $(presentational).get(0);
+            var presentationalEl = x$(presentational).get(0);
             
             var child;
             while (child = this.firstChild) {
               presentationalEl.appendChild(child);
             }
             
-            $(this).replaceWith(presentationalEl);
+            x$(this).replace(presentationalEl); // TODO: test
           });
         }
         replace('em', '<i />');
@@ -620,12 +887,12 @@
     // If the activeElement has no content, display the placeholder and give
     // the element the class `empty`.
     function maybeInsertPlaceholder() {
-      if ($.trim($(activeElement).text()).length === 0) {
-        $(activeElement).addClass('empty');
+      if (help.trim(x$(activeElement).text()).length === 0) {
+        x$(activeElement).addClass('empty');
         if (options.markup) {
-          $(activeElement).html('<p>'+options.placeholder+'</p>');
+          x$(activeElement).html('<p>'+options.placeholder+'</p>'); // TODO: check if html() does what we expect of it
         } else {
-          $(activeElement).html(options.placeholder);
+          x$(activeElement).html(options.placeholder);
         }
       }
     }
@@ -633,8 +900,8 @@
     // If the activeElement has the class `empty`, remove the placeholder and
     // the class.
     function maybeRemovePlaceholder() {
-      if ($(activeElement).hasClass('empty')) {
-        $(activeElement).removeClass('empty');
+      if (x$(activeElement).hasClass('empty')) {
+        x$(activeElement).removeClass('empty');
         selectAll();
         document.execCommand('delete', false, "");
       }
@@ -672,7 +939,7 @@
     
     // Selects the whole editing area.
     function selectAll() {
-      var el = $(activeElement)[0],
+      var el = x$(activeElement).get(0),
         range;
       
       if (document.body.createTextRange) { // IE < 9
@@ -729,14 +996,14 @@
     // called with a node containing the pasted content.
     function getPastedContent (callback) {
       // TODO: michael, explain why these css properties are needed -- timjb
-      var tmpEl = $('<div id="proper_tmp_el" contenteditable="true" />')
+      var tmpEl =  x$(document.body).bottom('<div id="proper_tmp_el" contenteditable="true" />').children().last()
         .css({
           position: 'fixed', top: '20px', left: '20px',
           opacity: '0', 'z-index': '10000',
           width: '1px', height: '1px'
         })
-        .appendTo(document.body)
-        .focus();
+        .fire('focus');
+
       setTimeout(function () {
         tmpEl.remove();
         callback(tmpEl);
@@ -751,35 +1018,35 @@
       
       function traverse (node) {
         // Remove comments
-        $(node).contents().filter(function () {
+        x$(node).contents().filter(function () {
           return this.nodeType === Node.COMMENT_NODE
         }).remove();
         
-        $(node).children().each(function () {
+        x$(node).children().each(function () {
           var tag = this.tagName.toLowerCase();
           traverse(this);
           if (allowedTags[tag]) {
-            var old  = $(this)
-            ,   neww = $(document.createElement(tag));
+            var old  = x$(this)
+            ,   neww = x$(document.createElement(tag));
             neww.html(old.html());
             help.each(allowedTags[tag], function (name) {
               neww.attr(name, old.attr(name));
             });
-            old.replaceWith(neww);
-          } else if (tag === 'font' && $(this).hasClass('proper-code')) {
+            old.replace(neww);
+          } else if (tag === 'font' && x$(this).hasClass('proper-code')) {
             // do nothing
           } else {
-            $(this).contents().first().unwrap();
+            x$(this).contents().first().unwrap();
           }
         });
       }
       
-      $(node).find('script, style').remove();
+      x$(node).find('script, style').remove();
       // Remove double annotations
       var annotations = 'strong, em, b, i, code, a';
-      $(node).find(annotations).each(function () {
-        $(this).find(annotations).each(function () {
-          $(this).contents().first().unwrap();
+      x$(node).find(annotations).each(function () {
+        x$(this).find(annotations).each(function () {
+          x$(this).contents().first().unwrap();
         });
       });
       traverse(node);
@@ -787,33 +1054,35 @@
     
     // Removes <b>, <i> and <font> tags
     function removeAnnotations (node) {
-      $(node).find('b, i, font').each(function () {
-        $(this).contents().first().unwrap();
+      x$(node).find('b, i, font').each(function () {
+        x$(this).contents().first().unwrap();
       });
     }
     
     function bindEvents(el) {
-      $(el)
-        .unbind('paste')
-        .unbind('keydown')
-        .unbind('keyup')
-        .unbind('focus')
-        .unbind('blur');
+      x$(el)
+        .un('paste')
+        .un('keydown')
+        .un('keyup')
+        .un('focus')
+        .un('blur');
       
-      $(el).bind('paste', function () {
+      x$(el).on('paste', function () {
         var isAnnotationActive = commands.strong.isActive()
                               || commands.em.isActive()
                               || commands.code.isActive();
         var selection = saveSelection();
         getPastedContent(function (node) {
+          var s = x$(node),
+              html = x$(node).html();
           restoreSelection(selection);
-          $(el).focus();
-          cleanPastedContent($(node));
+          x$(el).fire('focus');
+          cleanPastedContent(s);
           //semantifyContents($(node));
-          desemantifyContents($(node));
-          if (isAnnotationActive) removeAnnotations($(node));
+          desemantifyContents(s);
+          if (isAnnotationActive) removeAnnotations(s);
           // For some reason last </p> gets injected anyway
-          document.execCommand('insertHTML', false, $(node).html());
+          if(html) document.execCommand('insertHTML', false, html);
         });
       });
       
@@ -824,15 +1093,15 @@
       }
       
       // Prevent multiline
-      $(el).bind('keydown', function(e) {
+      x$(el).on('keydown', function(e) {
         if (!options.multiline && e.keyCode === 13) {
           e.stopPropagation();
           e.preventDefault();
           return;
         }
         if (e.keyCode === 8 &&
-            $.trim($(activeElement).text()) === '' &&
-            $(activeElement).find('p, li').length === 1) {
+            help.trim(x$(activeElement).text()) === '' &&
+            x$(activeElement).find('p, li').length === 1) {
           // backspace is pressed and the editor is empty
           // prevent the removal of the last paragraph
           e.preventDefault();
@@ -853,12 +1122,12 @@
         }
       });
       
-      $(el)
-        .bind('focus', maybeRemovePlaceholder)
-        .bind('blur', maybeInsertPlaceholder)
-        .bind('click', updateCommandState);
+      x$(el)
+        .on('focus', maybeRemovePlaceholder)
+        .on('blur', maybeInsertPlaceholder)
+        .on('click', updateCommandState);
       
-      $(el).bind('keyup', function(e) {        
+      x$(el).on('keyup', function(e) {
         updateCommandState();
         addCodeClasses();
         
@@ -882,46 +1151,43 @@
     // Instance methods
     // -----------
 
+    // TODO: unbind -> un?
     function deactivate () {
-      $(activeElement)
+      x$(activeElement)
         .attr('contenteditable', 'false')
-        .unbind('paste')
-        .unbind('keydown');
-      // x$('.proper-commands').html('remove');
-      $('.proper-commands').remove();
+        .un('paste')
+        .un('keydown');
+      x$('.proper-commands').remove();
       events.unbind('changed');
     };
     
     // Activate editor for a given element
     function activate (el, opts) {
-      options = {};
-      help.extend(options, defaultOptions, opts);
+      options = help.extend({}, defaultOptions, opts);
       
       // Deactivate previously active element
       deactivate();
       
       // Make editable
-      $(el).attr('contenteditable', true);
+      x$(el).attr('contenteditable', true);
       activeElement = el;
       bindEvents(el);
       
       // Setup controls
       if (options.markup) {
-        // $controls = x$(controlsTpl);
-        // x$(options.controlsTarget).bottom($controls);
-        $controls = $(controlsTpl);
-        $controls.appendTo($(options.controlsTarget));
+        $controls = x$(controlsTpl);
+        x$(options.controlsTarget).bottom($controls);
       }
       
       // Keyboard bindings
       if (options.markup) {
         function execLater(cmd) {
           return function(e) {
-            e.preventDefault();
+            e.preventDefault(); // TODO: test how would it behave
             exec(cmd);
           };
         }
-        $(activeElement)
+        /*$(activeElement)// TODO: add hotkey alternative
           .keydown('ctrl+shift+e', execLater('em'))
           .keydown('ctrl+shift+s', execLater('strong'))
           .keydown('ctrl+shift+c', execLater('code'))
@@ -930,15 +1196,15 @@
           .keydown('ctrl+shift+n', execLater('ol'))
           .keydown('tab',          execLater('indent'))
           .keydown('shift+tab',    execLater('outdent'));
+        */
       }
-      
       if (!options.startEmpty) 
-        $(activeElement).focus();
+        x$(activeElement).fire('focus');
       else
         maybeInsertPlaceholder();
       
       updateCommandState();
-      desemantifyContents($(activeElement));
+      desemantifyContents(x$(activeElement));
       
       // Use <b>, <i> and <font face="monospace"> instead of style attributes.
       // This is convenient because these inline element can easily be replaced
@@ -949,10 +1215,10 @@
         // This fails in Firefox.
       }
       
-      $('.proper-commands a.command').click(function(e) {
+      x$('.proper-commands a.command').click(function(e) {
         e.preventDefault();
-        $(activeElement).focus();
-        exec($(e.currentTarget).attr('command'));
+        x$(activeElement).fire('focus');
+        exec(x$(e.currentTarget).attr('command'));
         updateCommandState();
         setTimeout(function() { events.trigger('changed'); }, 10);
       });      
@@ -960,20 +1226,21 @@
     
     // Get current content
     function content () {
-      if ($(activeElement).hasClass('empty')) return '';
+      if (x$(activeElement).hasClass('empty')) return '';
       
       if (options.markup) {
         if (!activeElement) return '';
-        var clone = $(activeElement).clone();
+
+        var clone = x$(x$(activeElement).html());
         semantifyContents(clone);
         return clone.html();
+
       } else {
-        if (options.multiline) {
-          return $.trim(help.stripTags($(activeElement).html().replace(/<div>/g, '\n')
-                                             .replace(/<\/div>/g, '')));
-        } else {
-          return $.trim(help.stripTags($(activeElement).html()));
-        }
+
+        return help.trim( help.stripTags( !options.multiline ?
+            x$(activeElement).html() :
+            x$(activeElement).html().replace(/<div>/g, '\n').replace(/<\/div>/g, '')
+        ));
       }
     };
     
