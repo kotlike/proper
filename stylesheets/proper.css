@@ -11,6 +11,7 @@
   text-align:center;
   text-indent:-5000px;
   text-transform:uppercase;
+  background:#F3F3F3;
   background:rgba(0,0,0,0.05);
 
   -webkit-border-radius:5px;
@@ -26,15 +27,18 @@
 }
 
 .proper-commands .command:hover {
+  background:#EBEBEB;
   background:rgba(0,0,0,0.08);
 }
 
 .proper-commands .command:active {
+  background:#E1E1E1;
   background:rgba(0,0,0,0.12);
 }
 
 
 .proper-commands .command.selected {
+  background:#C8C8C8;
   background:rgba(0,0,0,0.12);
   -webkit-box-shadow: inset 0px 1px 4px rgba(0,0,0,0.2), inset 0px 2px 2px rgba(0,0,0,0.04), 0px 1px 0px rgba(255,255,255,0.5);
   -moz-box-shadow:    inset 0px 1px 4px rgba(0,0,0,0.2), inset 0px 2px 2px rgba(0,0,0,0.04), 0px 1px 0px rgba(255,255,255,0.5);

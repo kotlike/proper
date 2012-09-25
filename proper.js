@@ -1151,7 +1151,6 @@
     // Instance methods
     // -----------
 
-    // TODO: unbind -> un?
     function deactivate () {
       x$(activeElement)
         .attr('contenteditable', 'false')
@@ -1214,6 +1213,7 @@
       } catch (exc) {
         // This fails in Firefox.
       }
+
       
       x$('.proper-commands a.command').click(function(e) {
         e.preventDefault();
@@ -1233,6 +1233,7 @@
 
         var clone = x$(x$(activeElement).html());
         semantifyContents(clone);
+
         return clone.html();
 
       } else {

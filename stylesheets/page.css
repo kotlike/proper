@@ -36,8 +36,8 @@ body {
 }
 
 html {overflow:auto;}
-a { color:rgba(148,207,13,1);text-decoration:none; }
-h1 { margin-left: 10px; color:rgba(148,207,13,1); }
+a { color: #94cf0d; text-decoration:none; }
+h1 { color:#94cf0d; margin-left: 10px;  }
 
 .credits {
   margin-top: 80px;
@@ -76,7 +76,7 @@ strong, b {font-weight: bold;}
 code, .proper-code {
   font-family: Monaco, Consolas, "Lucida Console", monospace;
   font-size: 12px;
-  padding: 0px 3px;
+  padding: 0 3px;
   background: white;
   border: 1px solid #DDD;
 }
