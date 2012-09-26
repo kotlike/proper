@@ -410,6 +410,90 @@
         };
       }, this);
   }
+  // Kind of a plug-in for XUI not to pollute the namespace with bunch of variables
+  // Adds the ability to bind a keyboard shortcut to the XUI collection
+  //
+  //         keydown | keyup | keypress(shortcut, callback);
+  //
+  // use .un( 'keydown' | 'keyup' | 'keypress') to unbind all of the previously bound handlers
+  (function(xui){
+
+    var shortcuts = {
+      specialKeys: {
+        8: "backspace", 9: "tab", 13: "return", 16: "shift", 17: "ctrl", 18: "alt", 19: "pause",
+        20: "capslock", 27: "esc", 32: "space", 33: "pageup", 34: "pagedown", 35: "end", 36: "home",
+        37: "left", 38: "up", 39: "right", 40: "down", 45: "insert", 46: "del",
+        96: "0", 97: "1", 98: "2", 99: "3", 100: "4", 101: "5", 102: "6", 103: "7",
+        104: "8", 105: "9", 106: "*", 107: "+", 109: "-", 110: ".", 111 : "/",
+        112: "f1", 113: "f2", 114: "f3", 115: "f4", 116: "f5", 117: "f6", 118: "f7", 119: "f8",
+        120: "f9", 121: "f10", 122: "f11", 123: "f12", 144: "numlock", 145: "scroll", 191: "/", 224: "meta"
+      },
+
+      shiftNums: {
+          "`": "~", "1": "!", "2": "@", "3": "#", "4": "$", "5": "%", "6": "^", "7": "&",
+          "8": "*", "9": "(", "0": ")", "-": "_", "=": "+", ";": ": ", "'": "\"", ",": "<",
+          ".": ">",  "/": "?",  "\\": "|"
+      }
+    };
+
+    function shortcutHandler(short, callback){
+      short = short.toLowerCase();
+      // We do not process keyboard shortcuts for input and textarea fields
+      // Change this if necessary later
+      if(help.isNode(this.target, 'input') || help.isNode(this.target, 'textarea')) return;
+
+      var code = this.keyCode || this.which,
+          plain = String.fromCharCode( code ).toLowerCase(),
+          special = this.type !== "keypress" && shortcuts.specialKeys[ code ],
+          modifier = '',
+          variations = [];
+
+      // check combinations (alt|ctrl|shift+anything)
+      if ( this.altKey && special !== "alt" ) {
+        modifier += "alt+";
+      }
+
+      if ( this.ctrlKey && special !== "ctrl" ) {
+        modifier += "ctrl+";
+      }
+
+      if ( this.metaKey && !this.ctrlKey && special !== "meta" ) {
+        modifier += "meta+";
+      }
+
+      if ( this.shiftKey && special !== "shift" ) {
+        modifier += "shift+";
+      }
+
+      if ( special ) {
+        variations[ modifier + special ] = true;
+
+      } else {
+        variations[ modifier + plain ] = true;
+        variations[ modifier + shortcuts.shiftNums[ plain ] ] = true;
+
+        // "$" can be triggered as "Shift+4" or "Shift+$" or just "$"
+        if ( modifier === "shift+" ) {
+          variations[ shortcuts.shiftNums[ plain ] ] = true;
+        }
+      }
+
+      if(variations[short]){console.log('reached');
+        return callback(this);
+      }
+
+ }
+
+    help.each(['keydown', 'keyup', 'keypress'], function(name){
+      xui.fn[ name ] = function(short, fn){
+        return this.on(name, function(e){
+          // TODO: make one central dispatcher that looks through the [ shortcut -> handler ] mapping array for each element only ones
+          return shortcutHandler.call(e, short, fn);
+        });
+      }
+    });
+  })(xui);
+
 
 
   // borrowed from Backbone.js)
@@ -1182,11 +1266,11 @@
       if (options.markup) {
         function execLater(cmd) {
           return function(e) {
-            e.preventDefault(); // TODO: test how would it behave
+            e.preventDefault();
             exec(cmd);
           };
         }
-        /*$(activeElement)// TODO: add hotkey alternative
+        x$(activeElement)
           .keydown('ctrl+shift+e', execLater('em'))
           .keydown('ctrl+shift+s', execLater('strong'))
           .keydown('ctrl+shift+c', execLater('code'))
@@ -1195,7 +1279,7 @@
           .keydown('ctrl+shift+n', execLater('ol'))
           .keydown('tab',          execLater('indent'))
           .keydown('shift+tab',    execLater('outdent'));
-        */
+
       }
       if (!options.startEmpty) 
         x$(activeElement).fire('focus');
