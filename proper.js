@@ -478,7 +478,7 @@
         }
       }
 
-      if(variations[short]){console.log('reached');
+      if(variations[short]){
         return callback(this);
       }
 
@@ -1281,7 +1281,8 @@
           .keydown('shift+tab',    execLater('outdent'));
 
       }
-      if (!options.startEmpty) 
+
+      if (!options.startEmpty)
         x$(activeElement).fire('focus');
       else
         maybeInsertPlaceholder();
@@ -1305,7 +1306,9 @@
         exec(x$(e.currentTarget).attr('command'));
         updateCommandState();
         setTimeout(function() { events.trigger('changed'); }, 10);
-      });      
+      });
+      // make a hint that the content is changed when we switch between editable fields
+      setTimeout(function() { events.trigger('changed'); }, 10);
     };
     
     // Get current content
