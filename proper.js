@@ -192,7 +192,7 @@
     }
   })();
 
-// Chrome is Webkit, but Webkit is also Safari.
+  // Chrome is Webkit, but Webkit is also Safari.
   if ( browser.chrome ) {
     browser.webkit = true;
   } else if ( browser.webkit ) {
@@ -364,6 +364,17 @@
             x$( this ).replace( x$(this.childNodes) ); // XUI cannot accept the NodeList as a parameter to .html('outer', --> elem <-- );
           }
         });
+      },
+      // simple function to call the original element's focus function
+      // if it exists on an element and return XUI collection back
+      focus: function(){
+        var el = this.get(0);
+        el.focus && setTimeout( function(){
+          try{
+            el.focus();
+          }catch(e){}
+        }, 1);
+        return this;
       }
     });
 
@@ -504,7 +515,7 @@
   // `trigger`-ing an event fires all callbacks in succession.
   //
   //     var object = {};
-  //     _.extend(object, Backbone.Events);
+  //     help.extend(object, Backbone.Events);
   //     object.bind('expand', function(){ alert('expanded'); });
   //     object.trigger('expand');
   //
@@ -652,7 +663,7 @@
   // ------
   
   this.Proper = function(options) {
-    var activeElement = null, // element that's being edited
+    var $activeElement = null, // element that's being edited (this is an instance of XUI so that we do not need to call x$() each time we need XUI's functionality)
         $controls,
         direction = "left",
         events = help.extend({}, Events),
@@ -685,6 +696,8 @@
           command.toggleOn();
         }
       }
+      updateCommandState();
+      setTimeout(function() { events.trigger('changed'); }, 10);
     }
 
     function removeFormat() {
@@ -699,7 +712,7 @@
 
     // Give code elements (= monospace font) the class `proper-code`.
     function addCodeClasses() {
-      x$(activeElement).find('font').addClass('proper-code');
+      $activeElement.find('font').addClass('proper-code');
     }
 
     var nbsp = x$('<span>&nbsp;</span>').text();
@@ -846,10 +859,18 @@
                  .replace(/"/g, '&quot;');
     }
 
+    function unescape(text) {
+      return text.replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&nbsp;/g, ' ');
+    }
+
     function updateDirection() {
-      var dir = getDirection(x$(activeElement).text());
+      var dir = getDirection($activeElement.text());
       direction = dir === "R" ? "right" : "left";
-      x$(activeElement).setStyle('direction', dir === "R" ? "rtl" : "ltr");
+      $activeElement.setStyle('direction', dir === "R" ? "rtl" : "ltr");
     }
     
     // Recursively walks the dom and returns the semantified contents. Replaces
@@ -866,7 +887,7 @@
       replace('.proper-code', 'code');
       replace('div', 'p');
       //replace('span', 'span');
-      
+
       node.find('span').each(function () {
         if (this.firstChild) {
           x$(this.firstChild).unwrap();
@@ -884,7 +905,7 @@
         var s = x$(this),
             prev = s.prev();
         if (prev.length) {
-          prev.bottom(this); // TODO: test
+          prev.bottom(this);
         } else {
           s.wrap(x$('<li />'));
         }
@@ -943,7 +964,7 @@
               presentationalEl.appendChild(child);
             }
             
-            x$(this).replace(presentationalEl); // TODO: test
+            x$(this).replace(presentationalEl);
           });
         }
         replace('em', '<i />');
@@ -968,24 +989,20 @@
     // Placeholder
     // -----------
     
-    // If the activeElement has no content, display the placeholder and give
+    // If the $activeElement has no content, display the placeholder and give
     // the element the class `empty`.
     function maybeInsertPlaceholder() {
-      if (help.trim(x$(activeElement).text()).length === 0) {
-        x$(activeElement).addClass('empty');
-        if (options.markup) {
-          x$(activeElement).html('<p>'+options.placeholder+'</p>'); // TODO: check if html() does what we expect of it
-        } else {
-          x$(activeElement).html(options.placeholder);
-        }
+      if (help.trim($activeElement.text()).length === 0) {
+        $activeElement.addClass('empty');
+        $activeElement.html( options.markup ? '<p>'+options.placeholder+'</p>' : options.placeholder );
       }
     }
     
-    // If the activeElement has the class `empty`, remove the placeholder and
+    // If the $activeElement has the class `empty`, remove the placeholder and
     // the class.
     function maybeRemovePlaceholder() {
-      if (x$(activeElement).hasClass('empty')) {
-        x$(activeElement).removeClass('empty');
+      if ($activeElement.hasClass('empty')) {
+        $activeElement.removeClass('empty');
         selectAll();
         document.execCommand('delete', false, "");
       }
@@ -1023,7 +1040,7 @@
     
     // Selects the whole editing area.
     function selectAll() {
-      var el = x$(activeElement).get(0),
+      var el = $activeElement.get(0),
         range;
       
       if (document.body.createTextRange) { // IE < 9
@@ -1079,21 +1096,21 @@
     // currently focused element. Expects a callback function that will be
     // called with a node containing the pasted content.
     function getPastedContent (callback) {
-      // TODO: michael, explain why these css properties are needed -- timjb
-      var tmpEl =  x$(document.body).bottom('<div id="proper_tmp_el" contenteditable="true" />').children().last()
+
+      var tmpEl =  x$(document.body).bottom('<div id="proper_tmp_el" contenteditable="true" />').children().last() // append to the end of the body and switch to appended element
         .css({
           position: 'fixed', top: '20px', left: '20px',
           opacity: '0', 'z-index': '10000',
           width: '1px', height: '1px'
         })
-        .fire('focus');
+        .focus();
 
       setTimeout(function () {
         tmpEl.remove();
-        callback(tmpEl);
+        callback(tmpEl.html());
       }, 10);
     }
-    
+
     function cleanPastedContent (node) {
       var allowedTags = {
         p: [], ul: [], ol: [], li: [],
@@ -1110,13 +1127,13 @@
           var tag = this.tagName.toLowerCase();
           traverse(this);
           if (allowedTags[tag]) {
-            var old  = x$(this)
-            ,   neww = x$(document.createElement(tag));
-            neww.html(old.html());
+            var oldOne  = x$(this)
+            ,   newOne = x$(document.createElement(tag));
+            newOne.html(oldOne.html());
             help.each(allowedTags[tag], function (name) {
-              neww.attr(name, old.attr(name));
+              newOne.attr(name, oldOne.attr(name));
             });
-            old.replace(neww);
+            oldOne.replace(newOne);
           } else if (tag === 'font' && x$(this).hasClass('proper-code')) {
             // do nothing
           } else {
@@ -1142,50 +1159,56 @@
         x$(this).contents().first().unwrap();
       });
     }
+
+    function handlePaste(e){
+      var isAnnotationActive = commands.strong.isActive() ||
+                               commands.em.isActive() ||
+                               commands.code.isActive();
+      var selection = saveSelection();
+
+      getPastedContent(function (html) {
+        var s = x$('<div />').bottom(unescape(html));
+        restoreSelection(selection);
+        $activeElement.focus();
+        cleanPastedContent(s);
+        desemantifyContents(s);
+        if (isAnnotationActive) removeAnnotations(s);
+        // For some reason last </p> gets injected anyway
+        if( (html = s.html()) ) document.execCommand('insertHTML', false, html);
+        // make a hint that the content is changed
+        setTimeout(function() { events.trigger('changed'); }, 10);
+      });
+    }
     
-    function bindEvents(el) {
-      x$(el)
+    function bindEvents($el) {
+
+      function isTag(node, tag) {
+        if (!node || node === $activeElement) return false;
+        if (node.tagName && node.tagName.toLowerCase() === tag) return true;
+        return isTag(node.parentNode, tag);
+      }
+      
+      $el = x$($el); // not to call x$(el) every time
+      
+      $el
         .un('paste')
         .un('keydown')
         .un('keyup')
         .un('focus')
         .un('blur');
       
-      x$(el).on('paste', function () {
-        var isAnnotationActive = commands.strong.isActive()
-                              || commands.em.isActive()
-                              || commands.code.isActive();
-        var selection = saveSelection();
-        getPastedContent(function (node) {
-          var s = x$(node),
-              html = x$(node).html();
-          restoreSelection(selection);
-          x$(el).fire('focus');
-          cleanPastedContent(s);
-          //semantifyContents($(node));
-          desemantifyContents(s);
-          if (isAnnotationActive) removeAnnotations(s);
-          // For some reason last </p> gets injected anyway
-          if(html) document.execCommand('insertHTML', false, html);
-        });
-      });
-      
-      function isTag(node, tag) {
-        if (!node || node === activeElement) return false;
-        if (node.tagName && node.tagName.toLowerCase() === tag) return true;
-        return isTag(node.parentNode, tag);
-      }
+      $el.on('paste', handlePaste);
       
       // Prevent multiline
-      x$(el).on('keydown', function(e) {
+      $el.on('keydown', function(e) {
         if (!options.multiline && e.keyCode === 13) {
           e.stopPropagation();
           e.preventDefault();
           return;
         }
         if (e.keyCode === 8 &&
-            help.trim(x$(activeElement).text()) === '' &&
-            x$(activeElement).find('p, li').length === 1) {
+            help.trim($activeElement.text()) === '' &&
+            $activeElement.find('p, li').length === 1) {
           // backspace is pressed and the editor is empty
           // prevent the removal of the last paragraph
           e.preventDefault();
@@ -1206,12 +1229,12 @@
         }
       });
       
-      x$(el)
+      $el
         .on('focus', maybeRemovePlaceholder)
         .on('blur', maybeInsertPlaceholder)
         .on('click', updateCommandState);
       
-      x$(el).on('keyup', function(e) {
+      $el.on('keyup', function(e) {
         updateCommandState();
         addCodeClasses();
         
@@ -1236,32 +1259,40 @@
     // -----------
 
     function deactivate () {
-      x$(activeElement)
-        .attr('contenteditable', 'false')
-        .un('paste')
-        .un('keydown');
-      x$('.proper-commands').remove();
-      events.unbind('changed');
+      if($activeElement){
+        $activeElement
+          .attr('contenteditable', "false")
+          .un('paste')
+          .un('keydown');
+        x$('.proper-commands').remove();
+        events.unbind('changed');
+      }
     };
     
     // Activate editor for a given element
     function activate (el, opts) {
+      var newElem = x$(el);
+
+      // Check if this is not the same element
+      if( $activeElement && $activeElement.get(0) === newElem.get(0) ) return;
+
       options = help.extend({}, defaultOptions, opts);
-      
+
       // Deactivate previously active element
       deactivate();
-      
+
       // Make editable
-      x$(el).attr('contenteditable', true);
-      activeElement = el;
-      bindEvents(el);
-      
+      $activeElement = newElem;
+      newElem.attr('contenteditable', true);
+      bindEvents(newElem);
+
+
       // Setup controls
-      if (options.markup) {
+      if (options.markup && options.controlsTarget) {
         $controls = x$(controlsTpl);
         x$(options.controlsTarget).bottom($controls);
       }
-      
+
       // Keyboard bindings
       if (options.markup) {
         function execLater(cmd) {
@@ -1270,7 +1301,8 @@
             exec(cmd);
           };
         }
-        x$(activeElement)
+
+        $activeElement
           .keydown('ctrl+shift+e', execLater('em'))
           .keydown('ctrl+shift+s', execLater('strong'))
           .keydown('ctrl+shift+c', execLater('code'))
@@ -1283,12 +1315,12 @@
       }
 
       if (!options.startEmpty)
-        x$(activeElement).fire('focus');
+        $activeElement.focus();
       else
         maybeInsertPlaceholder();
       
       updateCommandState();
-      desemantifyContents(x$(activeElement));
+      desemantifyContents($activeElement);
       
       // Use <b>, <i> and <font face="monospace"> instead of style attributes.
       // This is convenient because these inline element can easily be replaced
@@ -1302,10 +1334,8 @@
       
       x$('.proper-commands a.command').click(function(e) {
         e.preventDefault();
-        x$(activeElement).fire('focus');
+        $activeElement.focus();
         exec(x$(e.currentTarget).attr('command'));
-        updateCommandState();
-        setTimeout(function() { events.trigger('changed'); }, 10);
       });
       // make a hint that the content is changed when we switch between editable fields
       setTimeout(function() { events.trigger('changed'); }, 10);
@@ -1313,21 +1343,16 @@
     
     // Get current content
     function content () {
-      if (x$(activeElement).hasClass('empty')) return '';
+      if (!$activeElement || $activeElement.hasClass('empty')) return '';
       
       if (options.markup) {
-        if (!activeElement) return '';
-
-        var clone = x$(x$(activeElement).html());
+        var clone = x$($activeElement.html());
         semantifyContents(clone);
-
         return clone.html();
-
       } else {
-
         return help.trim( help.stripTags( !options.multiline ?
-            x$(activeElement).html() :
-            x$(activeElement).html().replace(/<div>/g, '\n').replace(/<\/div>/g, '')
+            $activeElement.html() :
+            $activeElement.html().replace(/<div>/g, '\n').replace(/<\/div>/g, '')
         ));
       }
     };
